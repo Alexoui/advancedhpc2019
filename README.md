@@ -10,8 +10,7 @@ Students are expected to:
 * Push your commits regularly, with proper commit messages
 
 Student Info
-=======================
-
+<<<<<<< HEAD
 * Name: Alexandre CARO
 * ID: *skip*
 
@@ -24,4 +23,3 @@ ssh -p 22222 student5@ictlab.usth.edu.vn
  ssh ict2
 
  nvidia-smi
-
