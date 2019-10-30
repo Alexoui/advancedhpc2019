@@ -17,5 +17,11 @@ Student Info
 
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsD/oaGSe1MXsZ9TQ1WfhNmfaarxGzIEIIn7lZJcp8Cn9QmVlOeAK1JTS6S2/M501WzQPraGbGpp/upIJ6meklct+mDho0NcsqvWjdEf8EuR2G2eTPwfqLngnhU1Bj4p+zbW7rzkh97ziSp6zreHs8EF8KC6x0yfUbBY0DXqFJNyYIxqiMxeXtFh5BYdRnilA3WtDfCfQjJkoQndtpm4yLXHiJcmIvVBX9HR2UrlsZT2EU9L/Owd+UQjkEW1/DUwyjiyyok1YDfkwU10XWEer02iVIVP2TfG6vKkgsRBAxqEAFa7ivxLqQTyMaYhzXnX2yh+6PcV/gILnmyalj7GqZ alexa@LAPTOP-QMI6V7LJ
 
+to connect to the server :
 
 ssh -p 22222 student5@ictlab.usth.edu.vn
+
+ ssh ict2
+
+ nvidia-smi
+
