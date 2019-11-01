@@ -129,17 +129,25 @@ int getSPcores(cudaDeviceProp devProp) {
         case 2: // Fermi
             if (devProp.minor == 1) cores = mp * 48;
             else cores = mp * 32;
+		printf("Fermi");
+		printf("%d", cores);
             break;
         case 3: // Kepler
             cores = mp * 192;
+		
+		printf("%d", cores);		
             break;
         case 5: // Maxwell
             cores = mp * 128;
+		printf("Maxwell");
+		printf("%d", cores);
             break;
         case 6: // Pascal
             if (devProp.minor == 1) cores = mp * 128;
             else if (devProp.minor == 0) cores = mp * 64;
             else printf("Unknown device type\n");
+		printf("Pascal");
+		printf("%d", cores);
             break;
         default:
             printf("Unknown device type\n");
@@ -152,12 +160,26 @@ void Labwork::labwork2_GPU() {
     int nDevices = 0;
     // get all devices
     cudaGetDeviceCount(&nDevices);
+	
     printf("Number total of GPU : %d\n\n", nDevices);
     for (int i = 0; i < nDevices; i++){
         // get informations from individual device
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
+printf("Device Number: %d\n", i);
+    printf("  Device name: %s\n", prop.name);
+    printf("  Memory Clock Rate (KHz): %d\n",
+           prop.memoryClockRate);
+    printf("  Memory Bus Width (bits): %d\n",
+           prop.memoryBusWidth);
+    printf("  Peak Memory Bandwidth (GB/s): %f\n\n",
+           2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
+printf("Number of core");
+	getSPcores(prop);
         // something more here
+        printf("\n Core clock rate %d\n", prop.clockRate);
+	printf("Multiprocessor Core count %d\n", prop.multiProcessorCount);
+	printf("WarpSize %d\n",prop.warpSize);
     }
 
 }
