@@ -1,0 +1,33 @@
+\documentclass{article} \usepackage[utf8]{inputenc} \title{Report.3.investigate} \author{alexandre caro } 
+\date{October 2019} \begin{document} \maketitle \begin{verbatim} To implement the code for CUDA we do : 
+__global__ void grayscale(uchar3 *input, uchar3 *output) { int tid = threadIdx.x + blockIdx.x * blockDim.x; 
+output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3; output[tid].z = output[tid].y = output[tid].x;
+}
+void Labwork::labwork3_GPU() {
+         int pixelCount = inputImage->width * inputImage->height;
+         outputImage = static_cast<char *>(malloc(pixelCount * 3));
+                                                                                                                            // Calculate number of pixels
+    // Allocate CUDA memory uchar3 *devGray; uchar3 *devInput; cudaMalloc(&devInput, pixelCount * 
+sizeof(uchar3));
+        cudaMalloc(&devGray, pixelCount * sizeof(uchar3)); // Copy CUDA Memory from CPU to GPU 
+//cudaMemcpy(devGray, outputImage, pixelCount * sizeof(uchar3), cudaMemcpyHostToDevice); cudaMemcpy(devInput, 
+inputImage->buffer, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice); // Processing //rgb2grayCUDA<<<dimGrid, 
+dimBlock>>>(devInput,devGray,regionSize);
+        int blockSize =128;
+        int numBlock = pixelCount / blockSize;
+        grayscale<<<numBlock, blockSize>>>(devInput, devGray);
+    // Copy CUDA Memory from GPU to CPU //cudaMencpy()
+        cudaMemcpy(outputImage, devGray , pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+        //cudaMemcpy(inputImage->buffer, devInput, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+    // Cleaning
+        cudaFree(devInput);
+        cudaFree(devGray);
+}                         
+For blockSize = 128 we have : For the the first Labwork we have this time : USTH ICT Master 2018, Advanced 
+Programming for HPC. Warming up... Starting labwork 1 labwork 1 CPU ellapsed 5674.1ms labwork 1 ellapsed 493.8ms 
+For the third Labwork we have this time : USTH ICT Master 2018, Advanced Programming for HPC. Warming up... 
+Starting labwork 3 labwork 3 ellapsed 171.8ms For blockSize = 64 we have : USTH ICT Master 2018, Advanced 
+Programming for HPC. Warming up... Starting labwork 3 labwork 3 ellapsed 172.6ms For blockSize = 256 USTH ICT 
+Master 2018, Advanced Programming for HPC. Warming up... Starting labwork 3 labwork 3 ellapsed 179.4ms So we can 
+see that the closest to 128 the faster. The curve of blocksize vs speedup is a parabole curves \end{verbatim} 
+\end{document}
