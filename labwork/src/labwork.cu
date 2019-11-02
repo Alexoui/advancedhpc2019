@@ -222,8 +222,7 @@ void Labwork::labwork3_GPU() {
 	cudaFree(devGray);
 }
 
-void Labwork::labwork4_GPU() {
-}
+//void Labwork::labwork4_GPU() {}
 
 void Labwork::labwork5_CPU() {
 }
@@ -247,28 +246,42 @@ void Labwork::labwork9_GPU() {
 void Labwork::labwork10_GPU(){
 }
 
+__global__ void grayscale2(uchar3 *input, uchar3 *output) {
+int tx = threadIdx.x + blockIdx.x * blockDim.x;
+int ty = threadIdx.y + blockIdx.y * blockDim.y;
+int w = blockDim.x * gridDim.x;
+int tid = ty*w + tx;
+output[tid].x = (input[tid].x + input[tid].y +
+input[tid].z) / 3;
+output[tid].z = output[tid].y = output[tid].x;
+}
 
+void Labwork::labwork4_GPU() {
+         int pixelCount = inputImage->width * inputImage->height;
+         outputImage = static_cast<char *>(malloc(pixelCount * 3));
+                                                                   
+       // Calculate number of pixels
+    // Allocate CUDA memory
+	 uchar3 *devGray;
+	 uchar3 *devInput;
+	 cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+        cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+ // Copy CUDA Memory from CPU to GPU 
+//cudaMemcpy(devGray, outputImage, pixelCount * sizeof(uchar3), cudaMemcpyHostToDevice);
+ cudaMemcpy(devInput, inputImage->buffer, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+ // Processing
+ //rgb2grayCUDA<<<dimGrid, dimBlock>>>(devInput,devGray,regionSize);
+	dim3 blockSize = dim3(16,16);
+	dim3 gridSize = dim3(inputImage->width/blockSize.x,inputImage->height/blockSize.y);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	grayscale2<<<gridSize, blockSize>>>(devInput, devGray);
+        //int blockSize =128;
+       // int numBlock = pixelCount / blockSize;
+       // grayscale<<<numBlock, blockSize>>>(devInput, devGray);
+    // Copy CUDA Memory from GPU to CPU //cudaMencpy()
+        cudaMemcpy(outputImage, devGray , pixelCount*sizeof(uchar3),cudaMemcpyDeviceToHost);
+        //cudaMemcpy(inputImage->buffer, devInput, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+    // Cleaning
+        cudaFree(devInput);
+        cudaFree(devGray);
+}                   
