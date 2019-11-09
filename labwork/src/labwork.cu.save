@@ -189,6 +189,13 @@ output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3;
 output[tid].z = output[tid].y = output[tid].x;
 }
 
+__global__ int grayscaleBinarisation(uchar3 *input, uchar3 *output) {
+int tid = threadIdx.x + blockIdx.x * blockDim.x;
+output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3;
+output[tid].z = output[tid].y = output[tid].x;
+return tid;
+}
+
 void Labwork::labwork3_GPU() {
 	 int pixelCount = inputImage->width * inputImage->height;
    	 outputImage = static_cast<char *>(malloc(pixelCount * 3));
@@ -227,8 +234,7 @@ void Labwork::labwork5_CPU() {}
 
 //void Labwork::labwork5_GPU() {}
 
-void Labwork::labwork6_GPU() {
-}
+//void Labwork::labwork6_GPU() {}
 
 void Labwork::labwork7_GPU() {
 }
@@ -284,93 +290,158 @@ void Labwork::labwork4_GPU() {
         cudaFree(devGray);
 }                                              
 
+__global__ void blur(uchar3 *input, uchar3 *output, int width, int height)
+{
+	int convolution [7][7]={{0,0,1,2,1,0,0},{0,3,13,22,13,3,0},{1,13,59,97,59,13,1},{2,22,97,159,97,22,2},{1,13,59,97,59,13,1},{0,3,13,22,13,3,0},{0,0,1,2,1,0,0}};
+        int tidx = blockIdx.x*blockDim.x + threadIdx.x;
+        int tidy = blockIdx.y*blockDim.y + threadIdx.y;
+	int tid = tidy*width+tidx;
+	if (tidx<width)
+        {
+                if(tidy < height)
+                {
+			int left=0;
+			int right=7;
+			int up=0;
+			int bottom=7;
+			int somme=0;
+			if (tidx-3<0)
+			{
+				left=3-tidx;
+			}
+			 if (tidy-3<0)
+                        {
+                                up=3-tidy;
+                        }
+			  if (width-tidx<3)
+                        {
+                                right=right-width+tidx;
+                        }
+			  if (height-tidy<3)
+                        {
+                                bottom=bottom-height+tidy;
+                        }
 
-__global__ void Blurredfunction(uchar3 *input, uchar3 *output, int width, int height){
-	__shared__ int red[16][16] ;
-	__shared__ int green[16][16] ;
-	__shared__ int blue[16][16] ;
-	const int kernel[7][7] = {
-						{0,0,1,2,1,0,0},
-                        {0,3,13,22,13,3,0},
-                        {1,13,59,97,59,13,1},
-                        {2,22,97,159,97,22,2},
-                        {1,13,59,97,59,13,1},
-                        {0,3,13,22,13,3,0},
-                        {0,0,1,2,1,0,0} 
-	} ;  
-	
+			for (up= up ; up < bottom ; up++)
+			{
+				 for (left=left ; left < right ; left++)
+	                        {
+					somme=somme+(output[(tidy+up-3)*width + (tidx-3+left)].x)*convolution[up][left];
+                	        }
 
-        int tx = (threadIdx.x +blockIdx.x*16) -3;
-        int ty = (threadIdx.y +blockIdx.y*16)-3; // + blockIdx.y * blockDim.y)-3;
-        int index = (ty+3) *width ;
-        int tid = tx +3 + index ;
-        int tempx = 0 ;
-        int tempy = 0;
-        int tempz = 0; 
-        int i ;
-        int j ;
-        int somme = 0 ;
-        red[threadIdx.x][threadIdx.y] = input[tid].x ;   
-        green[threadIdx.x][threadIdx.y] = input[tid].y ;   
-        blue[threadIdx.x][threadIdx.y] = input[tid].z ;   
-	__syncthreads() ;
-        if ((tx < blockDim.x -4) and (tx > 2) and (ty< blockDim.y -4) and (ty>2)){
-	        for  (i=0;i<7;i++){
- 	               for (j=0;j<7;j++){
-	                      tempx += (kernel[i][j]) * (red[threadIdx.x+i][threadIdx.y+j]) ;
-                              tempy += (kernel[i][j]) * (green[threadIdx.x+i][threadIdx.y +j ]) ;
-                              tempz += (kernel[i][j]) * (blue[threadIdx.x+i][threadIdx.y + j]) ;
-                              somme += kernel[i][j] ;
-                       }
-                 }
-        	tempx = tempx / somme ;
-	        tempy = tempy / somme ;
-        	tempz = tempz / somme ;
-	        output[tid].x = tempx ;
-        	output[tid].y = tempy ;
-	        output[tid].z = tempz ;
+			}
+			int coeff=0;
+			 for (int j =0; j < 7 ; j++)
+                        {
+                                 for (int i=0 ; i < 7 ; i++)
+                                {
+                                        coeff=coeff+convolution[j][i];
+                                }
+
+                        }
+			output[tid].x= somme/coeff;
+			output[tid].z = output[tid].y = output[tid].x;
+
+
+                }
         }
-	__syncthreads() ;
-
 }
 
 
+__global__ void grayscale3(uchar3 *input, uchar3 *output, int width, int height)
+{
+	int c = blockIdx.x*blockDim.x + threadIdx.x;
+	int r = blockIdx.y*blockDim.y + threadIdx.y;
+	int w=  width ;
+	int tid = r*w + c;
+	if (c<width)
+	{
+		if(r < height)
+		{
+			output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3;
+			output[tid].z = output[tid].y = output[tid].x;
+		}
+	}
+}
 
 void Labwork::labwork5_GPU() {
-         int pixelCount = inputImage->width * inputImage->height;
-         outputImage = static_cast<char *>(malloc(pixelCount * 3));
-                                                                   
-       // Calculate number of pixels
+  
+        int pixelCount = inputImage->width * inputImage->height;
+        outputImage = static_cast<char *>(malloc(pixelCount * 3));
+
+// Calculate number of pixels
     // Allocate CUDA memory
-	 uchar3 *devGray;
-	 uchar3 *devInput;
-	 cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+        uchar3 *devInput;
+        uchar3 *devOutput;
+        cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+        cudaMalloc(&devOutput,pixelCount * sizeof(uchar3));
+	uchar3 *devGray;
         cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
- // Copy CUDA Memory from CPU to GPU 
-//cudaMemcpy(devGray, outputImage, pixelCount * sizeof(uchar3), cudaMemcpyHostToDevice);
- cudaMemcpy(devInput, inputImage->buffer, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
- // Processing
- //rgb2grayCUDA<<<dimGrid, dimBlock>>>(devInput,devGray,regionSize);
-	dim3 blockSize = dim3(16,16);
-	int numBlockx = inputImage-> width / (blockSize.x) ;
-       int numBlocky = inputImage-> height / (blockSize.y) ;
-       if ((inputImage-> width % (blockSize.x)) > 0) {
-	       numBlockx++ ;
-       }
-       if ((inputImage-> height % (blockSize.y)) > 0){
-	       numBlocky++ ;
-	}
-	dim3 gridSize = dim3(numBlockx,numBlocky) ;
-	Blurredfunction<<<gridSize,blockSize>>>(devInput,devGray, inputImage->width, inputImage->height) ;
-	//grayscale2<<<gridSize, blockSize>>>(devInput, devGray);
-        //int blockSize =128;
-       // int numBlock = pixelCount / blockSize;
-       // grayscale<<<numBlock, blockSize>>>(devInput, devGray);
-    // Copy CUDA Memory from GPU to CPU //cudaMencpy()
-        cudaMemcpy(outputImage, devGray , pixelCount*sizeof(uchar3),cudaMemcpyDeviceToHost);
-        //cudaMemcpy(inputImage->buffer, devInput, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+
+    // Copy CUDA Memory from CPU to GPU
+        cudaMemcpy(devInput, inputImage->buffer,pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+
+
+    // Processing
+        dim3 blockSize = dim3(32, 32);
+        int width =inputImage->width / blockSize.x;
+        int height=inputImage->height / blockSize.y;
+
+        if ((inputImage->width % blockSize.x)>0)
+        {
+                width++;
+        }
+        if ((inputImage->height % blockSize.y)>0)
+        {
+                height++;
+        }
+        dim3 gridSize = dim3(width, height);
+        grayscale3<<<gridSize, blockSize>>>(devInput, devGray , inputImage->width, inputImage->height);
+
+ 	blur<<<gridSize, blockSize>>>(devGray, devOutput , inputImage->width, inputImage->height);
+    // Copy CUDA Memory from GPU to CPU
+
+
+        cudaMemcpy(outputImage, devOutput,pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+
     // Cleaning
         cudaFree(devInput);
-        cudaFree(devGray);
-}       
+        cudaFree(devOutput);
+
+} 
+void Labwork::labwork6_GPU() {
+	 int pixelCount = inputImage->width * inputImage->height;
+   	 outputImage = static_cast<char *>(malloc(pixelCount * 3));
+	
+	
+    // Calculate number of pixels
+
+    // Allocate CUDA memory
+	uchar3 *devGray;    
+	uchar3 *devInput;
+	cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+	cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+
+
+    // Copy CUDA Memory from CPU to GPU
+//cudaMemcpy()
+//cudaMemcpy(devGray, outputImage, pixelCount * sizeof(uchar3), cudaMemcpyHostToDevice);
+	cudaMemcpy(devInput, inputImage->buffer, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+    // Processing
+//rgb2grayCUDA<<<dimGrid, dimBlock>>>(devInput,devGray,regionSize);
+	int blockSize =128;
+	int numBlock = pixelCount / blockSize;
+	int tid = grayscaleBinarisation<<<numBlock, blockSize>>>(devInput, devGray);
+	if(tid. 
+	out[tid] = f(A[tid]);
+
+
+    // Copy CUDA Memory from GPU to CPU
+//cudaMencpy()
+	cudaMemcpy(outputImage, devGray , pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+	//cudaMemcpy(inputImage->buffer, devInput, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+    // Cleaning
+	cudaFree(devInput);
+	cudaFree(devGray);
+}
 
