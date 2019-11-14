@@ -52,8 +52,8 @@ int main(int argc, char **argv) {
             labwork.saveOutputImage("labwork4-gpu-out.jpg");
             break;
         case 5:
-            labwork.labwork5_CPU();
-            labwork.saveOutputImage("labwork5-cpu-out.jpg");
+           // labwork.labwork5_CPU();
+           // labwork.saveOutputImage("labwork5-cpu-out.jpg");
             labwork.labwork5_GPU();
             labwork.saveOutputImage("labwork5-gpu-out.jpg");
             break;
@@ -224,16 +224,14 @@ void Labwork::labwork3_GPU() {
 
 //void Labwork::labwork4_GPU() {}
 
-void Labwork::labwork5_CPU() {
-}
+//void Labwork::labwork5_CPU() {}
 
-void Labwork::labwork5_GPU() {
-}
+//void Labwork::labwork5_GPU() {}
 
-void Labwork::labwork6_GPU() {
-}
+//void Labwork::labwork6_GPU() {}
 
 void Labwork::labwork7_GPU() {
+
 }
 
 void Labwork::labwork8_GPU() {
@@ -285,3 +283,151 @@ void Labwork::labwork4_GPU() {
         cudaFree(devInput);
         cudaFree(devGray);
 }                   
+
+__global__ void Blurredfunction(uchar3 *input, uchar3 *output, int width, int height){
+	__shared__ int red[16][16] ;
+	__shared__ int green[16][16] ;
+	__shared__ int blue[16][16] ;
+	const int kernel[7][7] = {
+						{0,0,1,2,1,0,0},
+                        {0,3,13,22,13,3,0},
+                        {1,13,59,97,59,13,1},
+                        {2,22,97,159,97,22,2},
+                        {1,13,59,97,59,13,1},
+                        {0,3,13,22,13,3,0},
+                        {0,0,1,2,1,0,0} 
+	} ;  
+	
+
+        int tx = (threadIdx.x +blockIdx.x*16) -3;
+        int ty = (threadIdx.y +blockIdx.y*16)-3; // + blockIdx.y * blockDim.y)-3;
+        int index = (ty+3) *width ;
+        int tid = tx +3 + index ;
+        int tempx = 0 ;
+        int tempy = 0;
+        int tempz = 0; 
+        int i ;
+        int j ;
+        int somme = 0 ;
+        red[threadIdx.x][threadIdx.y] = input[tid].x ;   
+        green[threadIdx.x][threadIdx.y] = input[tid].y ;   
+        blue[threadIdx.x][threadIdx.y] = input[tid].z ;   
+	__syncthreads() ;
+        if ((tx < blockDim.x -4) and (tx > 2) and (ty< blockDim.y -4) and (ty>2)){
+	        for  (i=0;i<7;i++){
+ 	               for (j=0;j<7;j++){
+	                      tempx += (kernel[i][j]) * (red[threadIdx.x+i][threadIdx.y+j]) ;
+                              tempy += (kernel[i][j]) * (green[threadIdx.x+i][threadIdx.y +j ]) ;
+                              tempz += (kernel[i][j]) * (blue[threadIdx.x+i][threadIdx.y + j]) ;
+                              somme += kernel[i][j] ;
+                       }
+                 }
+        	tempx = tempx / somme ;
+	        tempy = tempy / somme ;
+        	tempz = tempz / somme ;
+	        output[tid].x = tempx ;
+        	output[tid].y = tempy ;
+	        output[tid].z = tempz ;
+        }
+	__syncthreads() ;
+
+}
+
+void Labwork::labwork5_GPU(){
+        int pixelCount =  inputImage->width * inputImage->height ;
+       //allocate memory for the output on the host
+       outputImage = static_cast<char *>(malloc(pixelCount * 3));
+       // Allocate CUDA memory
+       uchar3 *devInput ;
+       uchar3 *devGray ;
+       cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+       cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+       // Copy CUDA Memory from CPU to GPU
+       cudaMemcpy(devInput, inputImage->buffer,pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+       // Processing
+       dim3 blockSize = dim3(16,16);
+       int numBlockx = inputImage-> width / (blockSize.x) ;
+       int numBlocky = inputImage-> height / (blockSize.y) ;
+       if ((inputImage-> width % (blockSize.x)) > 0) {
+	       numBlockx++ ;
+       }
+       if ((inputImage-> height % (blockSize.y)) > 0){
+	       numBlocky++ ;
+	}
+       dim3 gridSize = dim3(numBlockx,numBlocky) ;
+       Blurredfunction<<<gridSize,blockSize>>>(devInput,devGray, inputImage->width, inputImage->height) ;
+       // Copy CUDA Memory from GPU to CPU
+       cudaMemcpy(outputImage, devGray,pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+       // Cleaning
+       cudaFree(devInput) ;
+       cudaFree(devGray) ;
+}
+
+
+
+__global__ void binarization(uchar3 *input,uchar3 *output,int width, int threshold){
+	int tx = (threadIdx.x + blockIdx.x * blockDim.x);
+        int ty = (threadIdx.y + blockIdx.y * blockDim.y);
+        int index = ty *width ;
+		int tid = tx + index ;
+		if (input[tid].x < threshold){
+			output[tid].x = 0 ;
+		} else {
+			output[tid].x = 255 ;
+		}
+		output[tid].z = output[tid].y = output[tid].x ;
+}
+
+__global__ void brightnessControl(uchar3 *input,uchar3 *output, int width,  int pourcentage){
+        int tx = (threadIdx.x + blockIdx.x * blockDim.x);
+        int ty = (threadIdx.y + blockIdx.y * blockDim.y);
+        int index = ty *width ;
+        int tid = tx + index ;
+		int a ;
+		int incValue = pourcentage*255/100 ;
+		a = input[tid].x + incValue ;
+		if (a > 255){ output[tid].x = 255 ;}
+			else{ output[tid].x = a ;}
+		output[tid].z = output[tid].y = output[tid].x ;
+
+}
+
+
+void Labwork::labwork6_GPU() {
+         int pixelCount = inputImage->width * inputImage->height;
+         outputImage = static_cast<char *>(malloc(pixelCount * 3));
+                                                                   
+       // Calculate number of pixels
+    // Allocate CUDA memory
+	 uchar3 *devGray;
+	 uchar3 *devInput;
+	 cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+        cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+ // Copy CUDA Memory from CPU to GPU 
+//cudaMemcpy(devGray, outputImage, pixelCount * sizeof(uchar3), cudaMemcpyHostToDevice);
+ cudaMemcpy(devInput, inputImage->buffer, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+ // Processing
+ //rgb2grayCUDA<<<dimGrid, dimBlock>>>(devInput,devGray,regionSize);
+	dim3 blockSize = dim3(16,16);
+        int numBlockx = inputImage-> width / (blockSize.x) ;
+        int numBlocky = inputImage-> height / (blockSize.y) ;
+        if ((inputImage-> width % (blockSize.x)) > 0) {
+	        numBlockx++ ;
+	} 
+        if ((inputImage-> height % (blockSize.y)) > 0){
+		numBlocky++ ;
+	}
+       dim3 gridSize = dim3(numBlockx,numBlocky) ;
+       binarization<<<gridSize,blockSize>>>(devInput,devGray, inputImage->width,128) ;
+//       brightnessControl<<<gridSize,blockSize>>>(devInput,devGray, inputImage->width,50) ;
+
+        //int blockSize =128;
+       // int numBlock = pixelCount / blockSize;
+       // grayscale<<<numBlock, blockSize>>>(devInput, devGray);
+    // Copy CUDA Memory from GPU to CPU //cudaMencpy()
+        cudaMemcpy(outputImage, devGray,pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+        //cudaMemcpy(inputImage->buffer, devInput, pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+    // Cleaning
+        cudaFree(devInput);
+        cudaFree(devGray);
+}  
