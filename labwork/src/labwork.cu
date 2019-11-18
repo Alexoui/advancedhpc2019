@@ -230,9 +230,7 @@ void Labwork::labwork3_GPU() {
 
 //void Labwork::labwork6_GPU() {}
 
-void Labwork::labwork7_GPU() {
-
-}
+//void Labwork::labwork7_GPU() {}
 
 void Labwork::labwork8_GPU() {
 }
@@ -431,3 +429,84 @@ void Labwork::labwork6_GPU() {
         cudaFree(devInput);
         cudaFree(devGray);
 }  
+
+
+__global__ void  grayscale3(uchar3 *input,uchar3*output){
+	extern  __shared__ int cache[];
+	int max= 0  ;
+	int min=255 ;
+	
+	unsigned int tid2 = threadIdx.x;
+	unsigned int tx = threadIdx.x + blockIdx.x * blockDim.x;
+	unsigned int ty = threadIdx.y + blockIdx.y * blockDim.y;
+	unsigned int w = blockDim.x * gridDim.x;
+	int tid = ty*w + tx;
+	
+	cache[tid2] = input[tid].x ;
+	__syncthreads() ;
+	for (int i=1; i< blockDim.x; i*=2){
+		if (tid2 % (i*2) == 0) {
+			if (cache[tid2] < cache[tid2+i]){
+				cache[tid2] = cache[tid2 +i] ;
+				
+			}
+		}
+	__syncthreads() ;
+	}
+	if (tid2 == 0) {max = cache[0] ;}
+
+	cache[tid2] = input[tid].x;
+	__syncthreads() ;
+	for (int i=1; i< blockDim.x; i*=2){
+		if (tid2 % (i*2) == 0) {
+			if (cache[tid2] > cache[tid2+i]){
+				cache[tid2] = cache[tid2 +i] ;
+				
+			}
+		}
+	__syncthreads() ;
+	}
+	if (tid2 == 0) {min = cache[0] ;}
+	__syncthreads() ;
+	output[tid].x = (255*(input[tid].x - min))/(max-min) ;
+	output[tid].z = output[tid].y = output[tid].x ;
+	
+}
+
+
+void Labwork::labwork7_GPU() {
+       int pixelCount = inputImage->width * inputImage->height ;
+        //allocate memory for the output on the host
+        outputImage = static_cast<char *>(malloc(pixelCount * 3));
+        // Allocate CUDA memory
+        uchar3 *devInput ;
+		uchar3 * devInputBis ;
+		uchar3 *devGray ;
+		
+		cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+        cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+        cudaMalloc(&devInputBis, pixelCount * sizeof(uchar3));
+        // Copy CUDA Memory from CPU to GPU
+        cudaMemcpy(devInput, inputImage->buffer,pixelCount * sizeof(uchar3),cudaMemcpyHostToDevice);
+        // Processing
+        dim3 blockSize = dim3(16,16);
+	int sharedMemSize = 256 ;
+        int numBlockx = inputImage-> width / (blockSize.x) ;
+        int numBlocky = inputImage-> height / (blockSize.y) ;
+        if ((inputImage-> width % (blockSize.x)) > 0) {
+	        numBlockx++ ;
+	} 
+        if ((inputImage-> height % (blockSize.y)) > 0){
+		numBlocky++ ;
+	}
+       dim3 gridSize = dim3(numBlockx,numBlocky) ;
+       grayscale2<<<gridSize,blockSize>>>(devInput,devInputBis) ;
+       grayscale3<<<gridSize,blockSize,sharedMemSize>>>(devInputBis,devGray) ;
+       
+       // Copy CUDA Memory from GPU to CPU
+       cudaMemcpy(outputImage, devGray,pixelCount * sizeof(uchar3),cudaMemcpyDeviceToHost);
+       // Cleaning
+       cudaFree(devInput) ;
+       cudaFree(devGray) ;
+
+}
